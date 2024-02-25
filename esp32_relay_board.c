@@ -31,8 +31,8 @@ IPAddress apIP(192, 168, 4, 1);           // IP платы по-умолчани
 const char* ssid_ap = nSSID_AP;
 const char* password_ap = pwd_ap;
 // логин и пароль домашней сети WiFi
-const char* ssid = "Pentagon";
-const char* password = "inetpass00";
+const char* ssid = "ЗАМЕНИТЬ";
+const char* password = "ЗАМЕНИТЬ";
 // переменные передаваемые с web страницы
 const char* PARAM_INPUT_1 = "output";
 const char* PARAM_INPUT_2 = "state";
