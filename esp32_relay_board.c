@@ -4,6 +4,7 @@
 #include <AsyncElegantOTA.h>
 #include <esp_now.h>
 #include "AsyncTCP.h"
+#include <TickerScheduler.h>  
 
 
 #define DEBUG_UART  1   //  <DEBUG_UART> чтобы отключить вывод отладочных сообщений в UART
@@ -16,8 +17,10 @@
 * в фигурных скобках № GPIO к которому подключен вывод управления реле
 */
 int relayGPIOs[NUM_RELAYS] = { 23, 22, 21, 19, 18, 5, 17, 16 };
+uint8_t status_gpio[NUM_RELAYS] = { RESET, RESET, RESET, RESET, RESET, RESET, RESET, RESET };
 
-uint8_t macAddSlave[6];                   //  массив МАС адреса slave платы
+TickerScheduler Tasks(1);                     //Планировщик задач (Число задач)
+uint8_t broadcastAddress[6] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };   // BOARD_SLAVE - МАС платы клиента
 #define nSSID_AP "HomeLightServ"          // SSID и пароль для точки доступа которую создает ESP-плата
 #define pwd_ap "light@server"
 const char *server_name = "light.local";  //  адрес http://light.local/ по которому внутренний DNS сервер будет откличкаться при открытии главной страницы
@@ -28,8 +31,8 @@ IPAddress apIP(192, 168, 4, 1);           // IP платы по-умолчани
 const char* ssid_ap = nSSID_AP;
 const char* password_ap = pwd_ap;
 // логин и пароль домашней сети WiFi
-const char* ssid = "исправить";
-const char* password = "исправить";
+const char* ssid = "Pentagon";
+const char* password = "inetpass00";
 // переменные передаваемые с web страницы
 const char* PARAM_INPUT_1 = "output";
 const char* PARAM_INPUT_2 = "state";
@@ -39,6 +42,15 @@ const char* www_password = "otaadmin";
 
 AsyncWebServer server(80);
 DNSServer dnsServer;
+uint8_t count_wifi = 0;
+IPAddress ipBoard;
+
+typedef enum {
+  TM,
+  DATA,
+  CMD,
+} eIdMsg;
+
 
 /*
 * структура передаваемого сообщения 
@@ -46,11 +58,14 @@ DNSServer dnsServer;
 * [1] байт - состояние в которое необходимо перевести GPIO вывод отвечающий id
 */
 typedef struct {
+  uint8_t idMsg;      // id сообщения: 0 - обычное сообщение; 1 - сообщение с указанием IP адреса платы 
   uint8_t idLight;    // 
   uint8_t DataMsg;    //
+  uint8_t BoardIP[4];
 } esp_msg;
 
-esp_msg EspDataMsg;   // объявление структуры
+esp_msg EspDataMsg;       // объявление структуры принимаемых сообщений
+esp_msg outgoingMessage;  // объявление структуры отправляемых сообщений
 
 
 // Объявляем прототипы используемых функций
@@ -62,6 +77,9 @@ void InitESP_NOW(void);
 void onDataSent(const uint8_t *mac_addr, esp_now_send_status_t status);
 void printMAC(const uint8_t * mac_addr);
 void onDataRecv(const uint8_t *mac_addr, const uint8_t *incomingData, int len);
+void TasksInit(void);
+void lamp_status (void);
+void InitWiFi(void);
 // end
 
 
@@ -122,14 +140,14 @@ setInterval(function ( ) {
 String processor(const String& var){
   if(var == "BUTTONPLACEHOLDER"){
     String buttons ="";
-      buttons += "<h4>Светильник 1 </h4><label class=\"switch\"><input type=\"checkbox\" onchange=\"toggleCheckbox(this)\" id=\"0\" " + outputState(0) + "><span class=\"slider\"></span></label>";
-      buttons += "<h4>Светильник 2 </h4><label class=\"switch\"><input type=\"checkbox\" onchange=\"toggleCheckbox(this)\" id=\"1\" " + outputState(1) + "><span class=\"slider\"></span></label>";
-      buttons += "<h4>Светильник 3 </h4><label class=\"switch\"><input type=\"checkbox\" onchange=\"toggleCheckbox(this)\" id=\"2\" " + outputState(2) + "><span class=\"slider\"></span></label>";
-      buttons += "<h4>Светильник 4 </h4><label class=\"switch\"><input type=\"checkbox\" onchange=\"toggleCheckbox(this)\" id=\"3\" " + outputState(3) + "><span class=\"slider\"></span></label>";
-      buttons += "<h4>Светильник 5 </h4><label class=\"switch\"><input type=\"checkbox\" onchange=\"toggleCheckbox(this)\" id=\"4\" " + outputState(4) + "><span class=\"slider\"></span></label>";
-      buttons += "<h4>Светильник 6 </h4><label class=\"switch\"><input type=\"checkbox\" onchange=\"toggleCheckbox(this)\" id=\"5\" " + outputState(5) + "><span class=\"slider\"></span></label>";
-      buttons += "<h4>Светильник 7 </h4><label class=\"switch\"><input type=\"checkbox\" onchange=\"toggleCheckbox(this)\" id=\"6\" " + outputState(6) + "><span class=\"slider\"></span></label>";
-      buttons += "<h4>Светильник 8 </h4><label class=\"switch\"><input type=\"checkbox\" onchange=\"toggleCheckbox(this)\" id=\"7\" " + outputState(7) + "><span class=\"slider\"></span></label>";
+      buttons += "<h4>Группа 1 </h4><label class=\"switch\"><input type=\"checkbox\" onchange=\"toggleCheckbox(this)\" id=\"0\" " + outputState(0) + "><span class=\"slider\"></span></label>";
+      buttons += "<h4>Группа 2 </h4><label class=\"switch\"><input type=\"checkbox\" onchange=\"toggleCheckbox(this)\" id=\"1\" " + outputState(2) + "><span class=\"slider\"></span></label>";
+      buttons += "<h4>Группа 3 </h4><label class=\"switch\"><input type=\"checkbox\" onchange=\"toggleCheckbox(this)\" id=\"2\" " + outputState(4) + "><span class=\"slider\"></span></label>";
+      buttons += "<h4>Группа 4 </h4><label class=\"switch\"><input type=\"checkbox\" onchange=\"toggleCheckbox(this)\" id=\"3\" " + outputState(6) + "><span class=\"slider\"></span></label>";
+      // buttons += "<h4>Светильник 5 </h4><label class=\"switch\"><input type=\"checkbox\" onchange=\"toggleCheckbox(this)\" id=\"4\" " + outputState(4) + "><span class=\"slider\"></span></label>";
+      // buttons += "<h4>Светильник 6 </h4><label class=\"switch\"><input type=\"checkbox\" onchange=\"toggleCheckbox(this)\" id=\"5\" " + outputState(5) + "><span class=\"slider\"></span></label>";
+      // buttons += "<h4>Светильник 7 </h4><label class=\"switch\"><input type=\"checkbox\" onchange=\"toggleCheckbox(this)\" id=\"6\" " + outputState(6) + "><span class=\"slider\"></span></label>";
+      // buttons += "<h4>Светильник 8 </h4><label class=\"switch\"><input type=\"checkbox\" onchange=\"toggleCheckbox(this)\" id=\"7\" " + outputState(7) + "><span class=\"slider\"></span></label>";
       return buttons;
   }
   return String();
@@ -207,56 +225,62 @@ void printMAC(const uint8_t * mac_addr) {
 
 //---------------------------- Вызываемая функция когда принято сообщение платой------
 void onDataRecv(const uint8_t *mac_addr, const uint8_t *incomingData, int len) {
-    memcpy(&EspDataMsg, incomingData, sizeof(EspDataMsg));              // копируем принятое сообщение в переменную <EspDataMsg> типа структура
-    switch (EspDataMsg.idLight) {                                         //  выбираем из id светильника полученного в сообщении 
-      case 0:
-        digitalWrite(relayGPIOs[EspDataMsg.idLight], EspDataMsg.DataMsg); // переводим GPIO вывод в соответсвующее состояние 
-        break;
-      case 1:
-        digitalWrite(relayGPIOs[EspDataMsg.idLight], EspDataMsg.DataMsg); // переводим GPIO вывод в соответсвующее состояние
-        break;
-      case 2:
-        digitalWrite(relayGPIOs[EspDataMsg.idLight], EspDataMsg.DataMsg); // переводим GPIO вывод в соответсвующее состояние
-        break;
-      case 3:
-        digitalWrite(relayGPIOs[EspDataMsg.idLight], EspDataMsg.DataMsg); // переводим GPIO вывод в соответсвующее состояние
-        break;
-      case 4:
-        digitalWrite(relayGPIOs[EspDataMsg.idLight], EspDataMsg.DataMsg); // переводим GPIO вывод в соответсвующее состояние
-        break;
-      case 5:
-        digitalWrite(relayGPIOs[EspDataMsg.idLight], EspDataMsg.DataMsg); // переводим GPIO вывод в соответсвующее состояние
-        break;
-      case 6:
-        digitalWrite(relayGPIOs[EspDataMsg.idLight], EspDataMsg.DataMsg); // переводим GPIO вывод в соответсвующее состояние
-        break;
-      case 7:
-        digitalWrite(relayGPIOs[EspDataMsg.idLight], EspDataMsg.DataMsg); // переводим GPIO вывод в соответсвующее состояние
-        break;
-      case 8:
-        digitalWrite(relayGPIOs[EspDataMsg.idLight], EspDataMsg.DataMsg); // переводим GPIO вывод в соответсвующее состояние
-        break;
-      default:
-        // сюда никогда не должно зайти
-        break;
+    memcpy(&EspDataMsg, incomingData, sizeof(EspDataMsg));                // копируем принятое сообщение в переменную <EspDataMsg> типа структура
+    if (EspDataMsg.idMsg == CMD) {
+        digitalWrite(relayGPIOs[EspDataMsg.idLight], EspDataMsg.DataMsg);     // переводим "GPIO" вывод в соответсвующее состояние 
+        digitalWrite(relayGPIOs[EspDataMsg.idLight + 1], EspDataMsg.DataMsg); // переводим "GPIO + 1" вывод в соответсвующее состояние 
     }
+    
+
+}
+/*
+* Инициализация задач
+*/
+void TasksInit(void) {
+  Tasks.add(0,15000,[](void*){ lamp_status(); },nullptr,true);       // процесс[0] -  обновление состояния светильников - раз в 15 сек отправляются сообщения на плату клиента(с дисплеем)
+  Tasks.enable(0);                                                   // запускаем процесс
 }
 
+/*
+* Вызывааемая функция Task[0]
+*/
+void lamp_status (void) {
+  for(int i = 0; i < NUM_RELAYS; i++){
+    outgoingMessage.idMsg = TM;
+    outgoingMessage.idLight = i;
+    outgoingMessage.DataMsg = status_gpio[i];
+    esp_now_send(broadcastAddress, (uint8_t *) &outgoingMessage, sizeof(outgoingMessage));
+    }
+  outgoingMessage.idMsg = DATA;
+  outgoingMessage.BoardIP[0] = ipBoard[0];
+  outgoingMessage.BoardIP[1] = ipBoard[1];
+  outgoingMessage.BoardIP[2] = ipBoard[2];
+  outgoingMessage.BoardIP[3] = ipBoard[3];
+  esp_now_send(broadcastAddress, (uint8_t *) &outgoingMessage, sizeof(outgoingMessage));
+}
 
-void setup() {
-  Serial.begin(115200);
+void InitWiFi(void) {
   WiFi.mode(WIFI_AP_STA);                                                   // смешанный режим - точка доступа и подключаемся к Wi-Fi с указанными настройками SSID 
   WiFi.softAP(ssid_ap, password_ap, 7);                                     // Точка доступа на канале 7 
   WiFi.softAPConfig(apIP, apIP, IPAddress(255, 255, 255, 0));               // настройка точки доступа платы
-
   WiFi.begin(ssid, password);                                               // Подключаемся к своему WiFi
-  while (WiFi.status() != WL_CONNECTED) {
+  while (WiFi.status() != WL_CONNECTED && count_wifi != 10) {
     delay(1000);
     Serial.println("Connecting to WiFi..");
+    count_wifi++;
   }
-  dnsServer.start(DNS_PORT, server_name, apIP);                             // запускаем DNS-server
+  ipBoard = WiFi.localIP();
   Serial.println(WiFi.localIP());
+  dnsServer.start(DNS_PORT, server_name, apIP);                             // запускаем DNS-server
+  
+}
+
+void setup() {
+  Serial.begin(115200);
+  InitWiFi();
   gpio_init();                                                              //  инициализаруем GPIO для управления реле
+  InitESP_NOW();                                                            //  инициализаруем ESP-NOW
+  TasksInit();                                                              //  инициализаруем процессы
 
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){              //  обработка события "/" ассинхронного веб-сервера, т.е. открыть главную страницу
     request->send_P(200, "text/html", index_html, processor);
@@ -268,7 +292,36 @@ void setup() {
     if (request->hasParam(PARAM_INPUT_1) & request->hasParam(PARAM_INPUT_2)) {
       inputMessage = request->getParam(PARAM_INPUT_1)->value();                    // получаем <element.id>
       inputMessage2 = request->getParam(PARAM_INPUT_2)->value();                   // получаем <state>
-        digitalWrite(relayGPIOs[inputMessage.toInt()], inputMessage2.toInt());     // устанавливаем на вывод GPIO уровень в зависимости от полученного сообщения - digitalWrite(GPIO, LOW/HIGH)
+      int idRelay = inputMessage.toInt();
+      int RelayStatus = inputMessage2.toInt();
+        switch (idRelay) {
+          case 0:
+            digitalWrite (relayGPIOs[0], RelayStatus);      // устанавливаем на вывод GPIO уровень в зависимости от полученного сообщения c web-страницы - digitalWrite(GPIO, LOW/HIGH)
+            digitalWrite (relayGPIOs[1], RelayStatus);      // устанавливаем на вывод GPIO уровень в зависимости от полученного сообщения c web-страницы - digitalWrite(GPIO, LOW/HIGH)
+            status_gpio[0] = RelayStatus;                   // устанавливаем флаг включенного GPIO
+            status_gpio[1] = RelayStatus;                   // устанавливаем флаг включенного GPIO
+            break;
+          case 1:
+            digitalWrite (relayGPIOs[2], RelayStatus);      // устанавливаем на вывод GPIO уровень в зависимости от полученного сообщения c web-страницы - digitalWrite(GPIO, LOW/HIGH)
+            digitalWrite (relayGPIOs[3], RelayStatus);      // устанавливаем на вывод GPIO уровень в зависимости от полученного сообщения c web-страницы - digitalWrite(GPIO, LOW/HIGH)
+            status_gpio[2] = RelayStatus;                   // устанавливаем флаг включенного GPIO
+            status_gpio[3] = RelayStatus;                   // устанавливаем флаг включенного GPIO
+            break;
+          case 2:
+            digitalWrite (relayGPIOs[4], RelayStatus);      // устанавливаем на вывод GPIO уровень в зависимости от полученного сообщения c web-страницы - digitalWrite(GPIO, LOW/HIGH)
+            digitalWrite (relayGPIOs[5], RelayStatus);      // устанавливаем на вывод GPIO уровень в зависимости от полученного сообщения c web-страницы - digitalWrite(GPIO, LOW/HIGH)
+            status_gpio[4] = RelayStatus;                   // устанавливаем флаг включенного GPIO
+            status_gpio[5] = RelayStatus;                   // устанавливаем флаг включенного GPIO
+            break;
+          case 3:
+            digitalWrite (relayGPIOs[6], RelayStatus);      // устанавливаем на вывод GPIO уровень в зависимости от полученного сообщения c web-страницы - digitalWrite(GPIO, LOW/HIGH)
+            digitalWrite (relayGPIOs[7], RelayStatus);      // устанавливаем на вывод GPIO уровень в зависимости от полученного сообщения c web-страницы - digitalWrite(GPIO, LOW/HIGH)
+            status_gpio[6] = RelayStatus;                   // устанавливаем флаг включенного GPIO
+            status_gpio[7] = RelayStatus;                   // устанавливаем флаг включенного GPIO
+            break;
+          default:
+            break;
+        }                           
     }
     else {
       inputMessage = "No message sent";
@@ -282,5 +335,6 @@ void setup() {
 }
 
 void loop() {
+  Tasks.update();
   dnsServer.processNextRequest();     
 }
