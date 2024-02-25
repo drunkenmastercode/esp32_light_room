@@ -157,12 +157,42 @@ String processor(const String& var){
 * Функция получения состояния конкретного GPIO-вывода и возврат в функцию <processor>
 */
 String outputState(int gpio_id) {
-    if(digitalRead(relayGPIOs[gpio_id])){
-      return "checked";
-    }
-    else {
-      return "";
-    }
+  switch(gpio_id) {
+    case 0:
+      if(digitalRead(relayGPIOs[0]) && digitalRead(relayGPIOs[1])){
+        return "checked";
+      }
+      else {
+        return "";
+      }
+      break;
+    case 2:
+      if(digitalRead(relayGPIOs[2]) && digitalRead(relayGPIOs[3])){
+          return "checked";
+        }
+        else {
+          return "";
+        }
+      break;
+    case 4:
+      if(digitalRead(relayGPIOs[4]) && digitalRead(relayGPIOs[5])){
+        return "checked";
+      }
+      else {
+        return "";
+      }
+      break;
+    case 6:
+      if(digitalRead(relayGPIOs[6]) && digitalRead(relayGPIOs[7])){
+        return "checked";
+      }
+      else {
+        return "";
+      }
+      break;
+    default:
+      break;
+  }
 }
 
 /*
