@@ -227,9 +227,27 @@ void printMAC(const uint8_t * mac_addr) {
 void onDataRecv(const uint8_t *mac_addr, const uint8_t *incomingData, int len) {
     memcpy(&EspDataMsg, incomingData, sizeof(EspDataMsg));                // копируем принятое сообщение в переменную <EspDataMsg> типа структура
     if (EspDataMsg.idMsg == CMD) {
-        digitalWrite(relayGPIOs[EspDataMsg.idLight], EspDataMsg.DataMsg);     // переводим "GPIO" вывод в соответсвующее состояние 
-        digitalWrite(relayGPIOs[EspDataMsg.idLight + 1], EspDataMsg.DataMsg); // переводим "GPIO + 1" вывод в соответсвующее состояние 
-    }
+      switch (EspDataMsg.idLight) {
+        case 1:
+          digitalWrite(relayGPIOs[0], EspDataMsg.DataMsg);     // переводим "GPIO" вывод в соответсвующее состояние 
+          digitalWrite(relayGPIOs[1], EspDataMsg.DataMsg);     // переводим "GPIO + 1" вывод в соответсвующее состояние 
+          break;
+        case 2:
+          digitalWrite(relayGPIOs[2], EspDataMsg.DataMsg);     // переводим "GPIO" вывод в соответсвующее состояние 
+          digitalWrite(relayGPIOs[3], EspDataMsg.DataMsg);     // переводим "GPIO + 1" вывод в соответсвующее состояние 
+          break
+        case 2:
+          digitalWrite(relayGPIOs[4], EspDataMsg.DataMsg);     // переводим "GPIO" вывод в соответсвующее состояние 
+          digitalWrite(relayGPIOs[5], EspDataMsg.DataMsg);     // переводим "GPIO + 1" вывод в соответсвующее состояние 
+          break
+        case 4:
+          digitalWrite(relayGPIOs[6], EspDataMsg.DataMsg);     // переводим "GPIO" вывод в соответсвующее состояние 
+          digitalWrite(relayGPIOs[7], EspDataMsg.DataMsg);     // переводим "GPIO + 1" вывод в соответсвующее состояние 
+          break
+        default:
+          break;
+      }    
+}
     
 
 }
