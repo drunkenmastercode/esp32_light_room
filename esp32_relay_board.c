@@ -111,10 +111,10 @@ const char index_html[] PROGMEM = R"rawliteral(
 function toggleCheckbox(element) {
   var xhr = new XMLHttpRequest();
   if(element.checked) { 
-    xhr.open("GET", "/relay?output="+element.id+"&state=1", true); 
+    xhr.open("GET", "/relay?output="+element.id+"&state=0", true); 
     }
   else { 
-    xhr.open("GET", "/relay?output="+element.id+"&state=0", true); 
+    xhr.open("GET", "/relay?output="+element.id+"&state=1", true); 
     }
   xhr.send();
 }
