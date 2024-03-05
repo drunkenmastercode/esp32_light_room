@@ -31,8 +31,8 @@ IPAddress apIP(192, 168, 4, 1);           // IP платы по-умолчани
 const char* ssid_ap = nSSID_AP;
 const char* password_ap = pwd_ap;
 // логин и пароль домашней сети WiFi
-const char* ssid = "KIRA";
-const char* password = "gfgfgjgf";
+const char* ssid = "Pentagon";
+const char* password = "inetpass00";
 // переменные передаваемые с web страницы
 const char* PARAM_INPUT_1 = "output";
 const char* PARAM_INPUT_2 = "state";
@@ -221,6 +221,15 @@ String outputState(int gpio_id) {
       }
       break;
 
+    case 7:
+      if(digitalRead(relayGPIOs[7])){
+        return "";
+      }
+      else {
+        return "checked";
+      }
+      break;
+
     default:
       break;
   }
@@ -338,25 +347,25 @@ void lamp_status (void) {
     outgoingMessage.DataMsg = status_gpio[i];
     esp_now_send(broadcastAddress, (uint8_t *) &outgoingMessage, sizeof(outgoingMessage));
     }
-  outgoingMessage.idMsg = DATA;
-  outgoingMessage.BoardIP[0] = ipBoard[0];
-  outgoingMessage.BoardIP[1] = ipBoard[1];
-  outgoingMessage.BoardIP[2] = ipBoard[2];
-  outgoingMessage.BoardIP[3] = ipBoard[3];
-  esp_now_send(broadcastAddress, (uint8_t *) &outgoingMessage, sizeof(outgoingMessage));
+  // outgoingMessage.idMsg = DATA;
+  // outgoingMessage.BoardIP[0] = ipBoard[0];
+  // outgoingMessage.BoardIP[1] = ipBoard[1];
+  // outgoingMessage.BoardIP[2] = ipBoard[2];
+  // outgoingMessage.BoardIP[3] = ipBoard[3];
+
+  // esp_now_send(broadcastAddress, (uint8_t *) &outgoingMessage, sizeof(outgoingMessage));
 }
 
 void InitWiFi(void) {
-  WiFi.mode(WIFI_AP_STA);                                                   // смешанный режим - точка доступа и подключаемся к Wi-Fi с указанными настройками SSID 
+  WiFi.mode(WIFI_STA);                                                   // смешанный режим - точка доступа и подключаемся к Wi-Fi с указанными настройками SSID 
   WiFi.softAP(ssid_ap, password_ap, 7);                                     // Точка доступа на канале 7 
   WiFi.softAPConfig(apIP, apIP, IPAddress(255, 255, 255, 0));               // настройка точки доступа платы
   WiFi.begin(ssid, password);                                               // Подключаемся к своему WiFi
   while (WiFi.status() != WL_CONNECTED && count_wifi != 10) {
     delay(1000);
     Serial.println("Connecting to WiFi..");
-    count_wifi++;
+    count_wifi ++;
   }
-  ipBoard = WiFi.localIP();
   Serial.println(WiFi.localIP());
   dnsServer.start(DNS_PORT, server_name, apIP);                             // запускаем DNS-server
   
