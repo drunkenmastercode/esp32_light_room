@@ -17,7 +17,7 @@
 * в фигурных скобках № GPIO к которому подключен вывод управления реле
 */
 int relayGPIOs[NUM_RELAYS] = { 23, 22, 21, 19, 18, 5, 17, 16 };
-uint8_t status_gpio[NUM_RELAYS] = { RESET, RESET, RESET, RESET, RESET, RESET, RESET, RESET };
+uint8_t status_gpio[NUM_RELAYS] = { SET, SET, SET, SET, SET, SET, SET, SET };
 
 TickerScheduler Tasks(1);                     //Планировщик задач (Число задач)
 uint8_t broadcastAddress[6] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };   // BOARD_SLAVE - МАС платы клиента
@@ -160,34 +160,34 @@ String outputState(int gpio_id) {
   switch(gpio_id) {
     case 0:
       if(digitalRead(relayGPIOs[0]) && digitalRead(relayGPIOs[1])){
-        return "checked";
+        return "";
       }
       else {
-        return "";
+        return "checked";
       }
       break;
     case 2:
       if(digitalRead(relayGPIOs[2]) && digitalRead(relayGPIOs[3])){
-          return "checked";
+          return "";
         }
         else {
-          return "";
+          return "checked";
         }
       break;
     case 4:
       if(digitalRead(relayGPIOs[4]) && digitalRead(relayGPIOs[5])){
-        return "checked";
+        return "";
       }
       else {
-        return "";
+        return "checked";
       }
       break;
     case 6:
       if(digitalRead(relayGPIOs[6]) && digitalRead(relayGPIOs[7])){
-        return "checked";
+        return "";
       }
       else {
-        return "";
+        return "checked";
       }
       break;
     default:
@@ -203,7 +203,7 @@ String outputState(int gpio_id) {
 void gpio_init(void) {
   for(int i = 0; i < NUM_RELAYS; i++){
     pinMode(relayGPIOs[i], OUTPUT);
-    digitalWrite(relayGPIOs[i], LOW);
+    digitalWrite(relayGPIOs[i], HIGH);
     }
 }
 /*
